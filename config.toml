@@ -1,0 +1,15 @@
+[extension]
+name = "HotkeyListener"
+
+[[resources]]
+name = "Gui"
+tags = ["gui"]
+entrypoint = "gui.gd"
+
+can-popup = true
+selectable = false
+
+[[resources]]
+name = "Listener"
+tags = ["listener"]
+entrypoint = "listener.gd"
