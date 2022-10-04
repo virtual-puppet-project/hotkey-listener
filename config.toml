@@ -1,15 +1,23 @@
 [extension]
 name = "HotkeyListener"
+translation-key = "HOTKEY_LISTENER_EXTENSION_NAME"
 
 [[resources]]
 name = "Gui"
 tags = ["gui"]
 entrypoint = "gui.gd"
+translation-key = "HOTKEY_LISTENER_GUI"
 
 can-popup = true
 selectable = false
 
 [[resources]]
-name = "Listener"
-tags = ["listener"]
-entrypoint = "listener.gd"
+name = "InputForwarderLib"
+tags = ["plugin"]
+entrypoint = "input-forwarder"
+gdnative = true
+
+[[resources]]
+name = "InputForwarderSetup"
+entrypoint = "setup.gd"
+auto-execute = true

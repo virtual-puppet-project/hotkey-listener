@@ -1,0 +1,6 @@
+HOTKEY_LISTENER_EXTENSION_NAME="Hotkey Listener"
+
+HOTKEY_LISTENER_GUI="Hotkey listener"
+HOTKEY_LISTENER_USAGE_TEXT="A debug view of all inputs being received in the background. This view does nothing on its own. Other extensions can hook into these inputs.
+
+See: hotkey-listener/setup.gd"

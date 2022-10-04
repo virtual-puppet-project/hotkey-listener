@@ -13,19 +13,20 @@ func _init() -> void:
 
 	sc.add_child(vb)
 
-	var button := Button.new()
-	button.text = "start"
+	var usage := Label.new()
+	ControlUtil.h_expand_fill(usage)
+	usage.text = tr("HOTKEY_LISTENER_USAGE_TEXT")
+	usage.autowrap = true
 
-	button.connect("pressed", self, "_on_pressed")
+	vb.add_child(usage)
 
-	vb.add_child(button)
+	var le := LineEdit.new()
+	ControlUtil.h_expand_fill(le)
+	le.editable = false
 
-func _on_pressed() -> void:
-	var res: Result = Safely.wrap(AM.em.load_resource("HotkeyListener", "listener.gd"))
-	if res.is_err():
-		logger.error("Unable to load Listener")
-		return
+	AM.get_node(tr("HOTKEY_LISTENER_EXTENSION_NAME")).connect("input_received", self, "_on_input_received", [le])
 
-	var listener: Node = res.unwrap().new(9999)
+	vb.add_child(le)
 
-	get_tree().root.add_child(listener)
+func _on_input_received(text: String, le: LineEdit) -> void:
+	le.text = text
