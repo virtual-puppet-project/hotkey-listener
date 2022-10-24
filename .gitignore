@@ -4,3 +4,5 @@
 *.so
 *.dll
 *.so
+**/target/
+.vscode/
