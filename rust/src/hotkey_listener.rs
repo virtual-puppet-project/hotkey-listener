@@ -101,7 +101,7 @@ impl HotkeyListener {
         })
     }
 
-    pub fn register_hotkey<'a>(&mut self, name: &String, keys: &[String]) -> Result<()> {
+    pub fn register_hotkey(&mut self, name: &String, keys: &[String]) -> Result<()> {
         if self.hotkey_map.contains_key(name) {
             return Err(Error::HotkeyAlreadyExists);
         }
