@@ -1,8 +1,8 @@
-use crossbeam_channel::bounded;
+use crossbeam_channel::unbounded;
 use hotkey_listener::hotkey_listener;
 
 fn main() {
-    let (s, r) = bounded::<String>(1);
+    let (s, r) = unbounded::<String>();
 
     let mut listener = hotkey_listener::HotkeyListener::new(s).unwrap();
 

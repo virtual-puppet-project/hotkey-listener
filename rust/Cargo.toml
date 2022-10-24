@@ -8,8 +8,8 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[[examples]]
-name = "a_key"
+[[example]]
+name = "demo"
 default-features = false
 
 [features]

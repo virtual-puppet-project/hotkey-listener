@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use livesplit_hotkey::{Hook, KeyCode};
 
 #[derive(Debug)]
@@ -85,7 +85,7 @@ impl HotkeyListener {
             }
         };
 
-        let (sender, receiver) = bounded::<KeyCode>(1);
+        let (sender, receiver) = unbounded::<KeyCode>();
 
         Ok(HotkeyListener {
             hook: hook,
@@ -101,7 +101,7 @@ impl HotkeyListener {
         })
     }
 
-    pub fn register_hotkey(&mut self, name: &String, keys: &[String]) -> Result<()> {
+    pub fn register_hotkey<'a>(&mut self, name: &String, keys: &[String]) -> Result<()> {
         if self.hotkey_map.contains_key(name) {
             return Err(Error::HotkeyAlreadyExists);
         }
