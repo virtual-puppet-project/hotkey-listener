@@ -7,13 +7,13 @@ fn main() {
     let mut listener = hotkey_listener::HotkeyListener::new(s).unwrap();
 
     listener
-        .register_hotkey(
+        .register_action(
             &"APressed".to_string(),
             &["B".to_string(), "ControlLeft".to_string()],
         )
         .unwrap();
     listener
-        .register_hotkey(
+        .register_action(
             &"Test".to_string(),
             &["A".to_string(), "ControlLeft".to_string()],
         )

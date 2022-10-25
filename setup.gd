@@ -3,7 +3,7 @@ func execute() -> int:
 
 	var res: Result = Safely.wrap(
 		AM.em.load_gdnative_resource(
-			"HotkeyListener", "InputForwarderLib", "InputForwarder"))
+			"HotkeyListener", "HotkeyListenerLib", "HotkeyListenerNode"))
 	if res.is_err():
 		return ERR_BUG
 	

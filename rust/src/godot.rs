@@ -69,10 +69,10 @@ impl HotkeyListenerNode {
     }
 
     #[method]
-    fn register_hotkey(&mut self, name: GodotString, keys: VariantArray) -> bool {
+    fn register_action(&mut self, name: GodotString, keys: VariantArray) -> bool {
         let listener = self.hotkey_listener.as_mut().unwrap();
 
-        match listener.register_hotkey(
+        match listener.register_action(
             &name.to_string(),
             keys.into_iter()
                 .map(|x| x.to_string())
