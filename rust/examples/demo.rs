@@ -9,7 +9,7 @@ fn main() {
     listener
         .register_action(
             &"APressed".to_string(),
-            &["B".to_string(), "ControlLeft".to_string()],
+            &["A".to_string(), "ShiftLeft".to_string()],
         )
         .unwrap();
     listener
@@ -22,6 +22,12 @@ fn main() {
         .register_action(
             &"Test".to_string(),
             &["B".to_string(), "ControlLeft".to_string()],
+        )
+        .unwrap();
+    listener
+        .unregister_action(
+            &"APressed".to_string(),
+            &["A".to_string(), "ShiftLeft".to_string()],
         )
         .unwrap();
     listener.set_min_elapsed_time(0.2);
