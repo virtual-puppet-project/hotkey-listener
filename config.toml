@@ -12,9 +12,9 @@ can-popup = true
 selectable = false
 
 [[resources]]
-name = "InputForwarderLib"
+name = "HotkeyListenerLib"
 tags = ["plugin"]
-entrypoint = "input-forwarder"
+entrypoint = "hotkey-listener"
 gdnative = true
 
 [[resources]]

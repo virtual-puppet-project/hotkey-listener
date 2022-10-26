@@ -1,5 +1,6 @@
 use std::{
-    collections::HashMap,
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
     str::FromStr,
     time::{Duration, Instant},
 };
@@ -11,62 +12,97 @@ use livesplit_hotkey::{Hook, KeyCode};
 pub enum Error {
     HookCreate,
 
-    HotkeyAlreadyExists,
-    BadKeycodeName,
-    CannotRegisterHotkey,
+    ActionAlreadyExists,
+    ActionDoesNotExist(MapType),
+    KeyNotMapped,
+
+    MappedKeyMissingInReverseLookup,
+
+    BadKeyCodeName,
+    CannotRegisterHotkey(livesplit_hotkey::Error),
+    CannotUnregisterHotkey(livesplit_hotkey::Error),
+}
+
+#[derive(Debug)]
+pub enum MapType {
+    Actions,
+    ActionMapping,
+    ReverseLookup,
 }
 
 type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Default)]
-pub struct Mapping {
-    name: String,
-    keys: HashMap<KeyCode, KeyCodeData>,
+#[derive(Debug)]
+struct ActionMapping {
+    actions: Vec<String>,
+    keys: HashMap<KeyCode, Instant>,
 }
 
-impl Mapping {
-    fn press(&mut self, key: &KeyCode) {
-        self.keys.get_mut(key).unwrap().press();
+impl ActionMapping {
+    fn new(keys: &[KeyCode]) -> Self {
+        let mut hm = HashMap::new();
+        let offset = Duration::from_secs(60);
+        for key in keys.iter() {
+            hm.insert(key.clone(), Instant::now() - offset);
+        }
+
+        ActionMapping {
+            actions: vec![],
+            keys: hm,
+        }
     }
 
-    fn is_pressed(&self, min_elapsed_time: Duration) -> bool {
-        for v in self.keys.values() {
-            if !v.is_pressed(min_elapsed_time) {
+    /// Update the last pressed time for a given keycode.
+    /// Panics if the key does not exist as this should not be possible.
+    fn press_key(&mut self, key: &KeyCode) {
+        match self.keys.get_mut(key) {
+            Some(time) => *time = Instant::now(),
+            None => unreachable!(),
+        }
+    }
+
+    /// Iterates through every single key's timestamp and compares it to the passed
+    /// `min_elapsed_time`. If all timestamps are less tan the `min_elapsed_time`,
+    /// then the Action is considered to be pressed.
+    fn is_pressed(&self, min_elapsed_time: &Duration) -> bool {
+        for time in self.keys.values() {
+            if time.elapsed() > *min_elapsed_time {
                 return false;
             }
         }
+
         true
     }
-}
 
-struct KeyCodeData {
-    key: KeyCode,
-    timestamp: Instant,
-}
-
-impl KeyCodeData {
-    fn new(key: &KeyCode) -> Self {
-        KeyCodeData {
-            key: key.clone(),
-            timestamp: Instant::now() - Duration::from_secs(60), // TODO this is kinda weird
+    /// Adds an action to be emitted when all hotkeys are pressed.
+    fn add_action(&mut self, action: &String) -> Result<()> {
+        if self.actions.contains(action) {
+            return Err(Error::ActionAlreadyExists);
         }
+
+        self.actions.push(action.clone());
+
+        Ok(())
     }
 
-    fn press(&mut self) {
-        self.timestamp = Instant::now();
-    }
+    /// Removes an action to be emitted when all hotkeys are pressed.
+    fn remove_action(&mut self, action: &String) -> Result<()> {
+        if !self.actions.contains(action) {
+            return Err(Error::ActionDoesNotExist(MapType::ActionMapping));
+        }
 
-    fn is_pressed(&self, min_elapsed_time: Duration) -> bool {
-        self.timestamp.elapsed() < min_elapsed_time
+        self.actions.retain(|a| a != action);
+
+        Ok(())
     }
 }
 
-/// Based off the HotkeySystem implementation from https://github.com/LiveSplit/livesplit-core
 pub struct HotkeyListener {
     hook: Hook,
 
-    key_to_hotkey_map: HashMap<KeyCode, Vec<String>>,
-    hotkey_map: HashMap<String, Mapping>,
+    actions: HashMap<u64, ActionMapping>,
+    reverse_lookup: HashMap<KeyCode, Vec<u64>>,
+
     min_elapsed_time: Duration,
 
     callback_sender: Sender<KeyCode>,
@@ -90,9 +126,10 @@ impl HotkeyListener {
         Ok(HotkeyListener {
             hook: hook,
 
-            key_to_hotkey_map: HashMap::default(),
-            hotkey_map: HashMap::default(),
-            min_elapsed_time: Duration::from_secs_f32(0.2),
+            actions: HashMap::new(),
+            reverse_lookup: HashMap::new(),
+
+            min_elapsed_time: Duration::from_secs_f32(0.2), // TODO hardcoded value?
 
             callback_sender: sender,
             callback_receiver: receiver,
@@ -101,49 +138,110 @@ impl HotkeyListener {
         })
     }
 
-    pub fn register_hotkey(&mut self, name: &String, keys: &[String]) -> Result<()> {
-        if self.hotkey_map.contains_key(name) {
-            return Err(Error::HotkeyAlreadyExists);
+    pub fn register_action(&mut self, action_name: &String, keys: &[String]) -> Result<()> {
+        let (key_codes, key_codes_hash) = match string_slice_to_vec_and_hash(keys) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
+
+        match self.actions.get_mut(&key_codes_hash) {
+            Some(am) => match am.add_action(action_name) {
+                Ok(_) => {}
+                Err(e) => return Err(e),
+            },
+            None => {
+                let mut am = ActionMapping::new(key_codes.as_slice());
+                am.add_action(action_name).unwrap();
+                self.actions.insert(key_codes_hash, am);
+            }
         }
 
-        let mut mapping = Mapping::default();
-        mapping.name = name.clone();
-
-        for key in keys {
-            let keycode = match KeyCode::from_str(key.as_str()) {
-                Ok(k) => k,
-                Err(_) => return Err(Error::BadKeycodeName),
-            };
-
-            mapping.keys.insert(keycode, KeyCodeData::new(&keycode));
-
-            match self.key_to_hotkey_map.get_mut(&keycode) {
-                Some(m) => m.push(name.clone()),
+        for key in key_codes.iter() {
+            match self.reverse_lookup.get_mut(key) {
+                Some(v) => {
+                    if !v.contains(&key_codes_hash) {
+                        v.push(key_codes_hash);
+                    }
+                }
                 None => {
-                    self.key_to_hotkey_map.insert(keycode, vec![name.clone()]);
-
                     let sender = self.callback_sender.clone();
-                    match self
-                        .hook
-                        .register(keycode, move || match sender.send(keycode) {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("{e}"),
-                        }) {
+                    let key = key.clone();
+                    match self.hook.register(key, move || match sender.send(key) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("{e}"),
+                    }) {
                         Ok(_) => {}
                         Err(e) => {
-                            eprintln!("{e}");
-                            return Err(Error::CannotRegisterHotkey);
+                            return Err(Error::CannotRegisterHotkey(e));
                         }
                     }
+                    self.reverse_lookup.insert(key, vec![key_codes_hash]);
                 }
             }
         }
 
-        self.hotkey_map.insert(name.clone(), mapping);
+        Ok(())
+    }
+
+    /// Safely removes an action + key sequence without accidentally removing other action's hotkeys.
+    /// If no more actions depend on a certain key, the hook for that key is unregistered.
+    pub fn unregister_action(&mut self, action_name: &String, keys: &[String]) -> Result<()> {
+        let (key_codes, key_codes_hash) = match string_slice_to_vec_and_hash(keys) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
+
+        let mut is_empty_hash = false;
+
+        match self.actions.get_mut(&key_codes_hash) {
+            Some(am) => match am.remove_action(action_name) {
+                Ok(_) => {
+                    if am.actions.len() < 1 {
+                        is_empty_hash = true;
+                    }
+                }
+                Err(e) => return Err(e),
+            },
+            None => return Err(Error::ActionDoesNotExist(MapType::Actions)),
+        }
+
+        if !is_empty_hash {
+            return Ok(());
+        }
+
+        let mut empty_keys: Vec<KeyCode> = vec![];
+
+        match self.actions.remove(&key_codes_hash) {
+            Some(_) => {}
+            None => unreachable!(),
+        }
+
+        for key in key_codes.iter() {
+            match self.reverse_lookup.get_mut(key) {
+                Some(v) => {
+                    v.retain(|hash| hash != &key_codes_hash);
+                    if v.is_empty() {
+                        empty_keys.push(*key);
+                    }
+                }
+                None => unreachable!(),
+            }
+        }
+
+        for key in empty_keys.iter() {
+            match self.reverse_lookup.remove(key) {
+                Some(_) => match self.hook.unregister(*key) {
+                    Ok(_) => {}
+                    Err(e) => return Err(Error::CannotUnregisterHotkey(e)),
+                },
+                None => unreachable!(),
+            }
+        }
 
         Ok(())
     }
 
+    // TODO maybe we should clear the channel? Clearing the channel might infinitely loop though
     pub fn poll(&mut self) {
         if self.callback_receiver.is_empty() {
             return;
@@ -151,20 +249,31 @@ impl HotkeyListener {
 
         match self.callback_receiver.recv() {
             Ok(key) => {
-                if !self.key_to_hotkey_map.contains_key(&key) {
+                if !self.reverse_lookup.contains_key(&key) {
                     return;
                 }
-                for hotkey_name in self.key_to_hotkey_map.get(&key).unwrap() {
-                    let mapping = match self.hotkey_map.get_mut(hotkey_name) {
-                        Some(m) => m,
-                        None => continue,
-                    };
 
-                    mapping.press(&key);
-                    if mapping.is_pressed(self.min_elapsed_time) {
-                        if let Err(e) = self.listener_sender.send(hotkey_name.clone()) {
-                            eprintln!("{e}");
+                let vec = match self.reverse_lookup.get(&key) {
+                    Some(v) => v,
+                    None => {
+                        return;
+                    }
+                };
+
+                for hash in vec.iter() {
+                    match self.actions.get_mut(&hash) {
+                        Some(am) => {
+                            am.press_key(&key);
+                            if am.is_pressed(&self.min_elapsed_time) {
+                                for action_name in am.actions.iter() {
+                                    match self.listener_sender.send(action_name.clone()) {
+                                        Ok(_) => {}
+                                        Err(e) => eprintln!("{e}"),
+                                    }
+                                }
+                            }
                         }
+                        None => unreachable!(),
                     }
                 }
             }
@@ -172,11 +281,28 @@ impl HotkeyListener {
         }
     }
 
-    pub fn set_min_elapsed_time(&mut self, new_time: f32) {
-        self.min_elapsed_time = Duration::from_secs_f32(new_time);
+    pub fn set_min_elapsed_time(&mut self, min_elapsed_time: f32) {
+        self.min_elapsed_time = Duration::from_secs_f32(min_elapsed_time);
+    }
+}
+
+fn string_slice_to_vec_and_hash(keys: &[String]) -> Result<(Vec<KeyCode>, u64)> {
+    let mut key_codes = vec![];
+    for key in keys.iter() {
+        match KeyCode::from_str(key) {
+            Ok(k) => key_codes.push(k),
+            Err(_) => return Err(Error::BadKeyCodeName),
+        };
     }
 
-    pub fn get_min_elapsed_time(&self) -> f32 {
-        self.min_elapsed_time.as_secs_f32()
-    }
+    let key_codes_hash = get_hash(&key_codes);
+
+    Ok((key_codes, key_codes_hash))
+}
+
+fn get_hash<T: Hash>(data: &T) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    data.hash(&mut hasher);
+
+    hasher.finish()
 }

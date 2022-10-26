@@ -7,15 +7,27 @@ fn main() {
     let mut listener = hotkey_listener::HotkeyListener::new(s).unwrap();
 
     listener
-        .register_hotkey(
+        .register_action(
             &"APressed".to_string(),
+            &["A".to_string(), "ShiftLeft".to_string()],
+        )
+        .unwrap();
+    listener
+        .register_action(
+            &"Test".to_string(),
+            &["A".to_string(), "ControlLeft".to_string()],
+        )
+        .unwrap();
+    listener
+        .register_action(
+            &"Test".to_string(),
             &["B".to_string(), "ControlLeft".to_string()],
         )
         .unwrap();
     listener
-        .register_hotkey(
-            &"Test".to_string(),
-            &["A".to_string(), "ControlLeft".to_string()],
+        .unregister_action(
+            &"APressed".to_string(),
+            &["A".to_string(), "ShiftLeft".to_string()],
         )
         .unwrap();
     listener.set_min_elapsed_time(0.2);

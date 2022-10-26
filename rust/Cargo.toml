@@ -10,7 +10,6 @@ crate-type = ["cdylib", "rlib"]
 
 [[example]]
 name = "demo"
-default-features = false
 
 [features]
 default = ["gdnative"]

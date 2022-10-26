@@ -24,9 +24,9 @@ func _init() -> void:
 	ControlUtil.h_expand_fill(le)
 	le.editable = false
 
-	AM.get_node(tr("HOTKEY_LISTENER_EXTENSION_NAME")).connect("input_received", self, "_on_input_received", [le])
+	AM.get_node(tr("HOTKEY_LISTENER_EXTENSION_NAME")).connect("key_received", self, "_on_key_received", [le])
 
 	vb.add_child(le)
 
-func _on_input_received(text: String, le: LineEdit) -> void:
+func _on_key_received(text: String, le: LineEdit) -> void:
 	le.text = text

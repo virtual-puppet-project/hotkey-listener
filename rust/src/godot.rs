@@ -11,7 +11,6 @@ const KEY_RECEIVED_SIGNAL: &str = "key_received";
 pub struct HotkeyListenerNode {
     is_valid: bool,
     hotkey_listener: Option<HotkeyListener>,
-
     receiver: Receiver<String>,
 }
 
@@ -69,16 +68,23 @@ impl HotkeyListenerNode {
     }
 
     #[method]
-    fn register_hotkey(&mut self, name: GodotString, keys: VariantArray) -> bool {
+    fn register_action(&mut self, name: GodotString, keys: VariantArray) -> bool {
         let listener = self.hotkey_listener.as_mut().unwrap();
 
-        match listener.register_hotkey(
-            &name.to_string(),
-            keys.into_iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .as_slice(),
-        ) {
+        match listener.register_action(&name.to_string(), varray_to_slice(&keys).as_slice()) {
+            Ok(_) => true,
+            Err(e) => {
+                godot_error!("{:?}", e);
+                false
+            }
+        }
+    }
+
+    #[method]
+    fn unregister_action(&mut self, name: GodotString, keys: VariantArray) -> bool {
+        let listener = self.hotkey_listener.as_mut().unwrap();
+
+        match listener.unregister_action(&name.to_string(), varray_to_slice(&keys).as_slice()) {
             Ok(_) => true,
             Err(e) => {
                 godot_error!("{:?}", e);
@@ -91,6 +97,12 @@ impl HotkeyListenerNode {
     fn is_valid(&self) -> bool {
         self.is_valid
     }
+}
+
+fn varray_to_slice(keys: &VariantArray) -> Vec<String> {
+    keys.into_iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<String>>()
 }
 
 pub fn init(handle: InitHandle) {
