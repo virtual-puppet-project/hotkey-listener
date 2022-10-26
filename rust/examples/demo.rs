@@ -18,6 +18,12 @@ fn main() {
             &["A".to_string(), "ControlLeft".to_string()],
         )
         .unwrap();
+    listener
+        .register_action(
+            &"Test".to_string(),
+            &["B".to_string(), "ControlLeft".to_string()],
+        )
+        .unwrap();
     listener.set_min_elapsed_time(0.2);
 
     loop {
