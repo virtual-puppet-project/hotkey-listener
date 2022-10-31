@@ -5,6 +5,11 @@ use crate::hotkey_listener::*;
 
 const KEY_RECEIVED_SIGNAL: &str = "key_received";
 
+/// Godot wrapper for interacting with the base Rust library.
+///
+/// In the interest of having Godot handle errors, this struct can potentially fail to initialize.
+/// The `is_valid` func should be checked before doing anything with the object. If the object is not valid,
+/// then Godot should clean up the object.
 #[derive(NativeClass)]
 #[inherit(Node)]
 #[register_with(Self::register_signals)]
@@ -26,12 +31,13 @@ impl HotkeyListenerNode {
                     receiver: r,
                 }
             }
-            Err(_) => {
+            Err(e) => {
+                godot_error!("An error occurred while setting up HotkeyListener: {:?}", e);
                 return HotkeyListenerNode {
                     is_valid: false,
                     hotkey_listener: None,
                     receiver: r,
-                }
+                };
             }
         }
     }
@@ -41,15 +47,13 @@ impl HotkeyListenerNode {
     }
 
     #[method]
-    fn _process(&mut self, #[base] owner: &Node, _delta: f32) {
-        if !self.is_valid {
-            return;
-        }
+    fn _ready(&self, #[base] o: &Node) {
+        o.set_process(if self.is_valid { true } else { false });
+    }
 
-        let listener = match self.hotkey_listener.as_mut() {
-            Some(l) => l,
-            None => return,
-        };
+    #[method]
+    fn _process(&mut self, #[base] owner: &Node, _delta: f32) {
+        let listener = self.hotkey_listener.as_mut().unwrap();
         listener.poll();
 
         if self.receiver.is_empty() {
@@ -67,45 +71,105 @@ impl HotkeyListenerNode {
         }
     }
 
-    #[method]
-    fn register_action(&mut self, name: GodotString, keys: VariantArray) -> bool {
-        let listener = self.hotkey_listener.as_mut().unwrap();
-
-        match listener.register_action(&name.to_string(), varray_to_slice(&keys).as_slice()) {
-            Ok(_) => true,
-            Err(e) => {
-                godot_error!("{:?}", e);
-                false
-            }
-        }
-    }
-
-    #[method]
-    fn unregister_action(&mut self, name: GodotString, keys: VariantArray) -> bool {
-        let listener = self.hotkey_listener.as_mut().unwrap();
-
-        match listener.unregister_action(&name.to_string(), varray_to_slice(&keys).as_slice()) {
-            Ok(_) => true,
-            Err(e) => {
-                godot_error!("{:?}", e);
-                false
-            }
-        }
-    }
-
+    /// Setting up the initial OS hook can fail. If initial setup fails, then this class is no longer valid.
+    ///
+    /// This **MUST** be checked first since all other functions assume the setup succeeded.
     #[method]
     fn is_valid(&self) -> bool {
         self.is_valid
     }
+
+    /// Godot -> Rust wrapper
+    #[method]
+    fn register_action(&mut self, name: GodotString, keys: VariantArray) -> bool {
+        let listener = self.hotkey_listener.as_mut().unwrap();
+
+        match listener.register_action(&name.to_string(), varray_to_vec(&keys).as_slice()) {
+            Ok(_) => true,
+            Err(e) => {
+                godot_error!("{:?}", e);
+                false
+            }
+        }
+    }
+
+    /// Godot -> Rust wrapper
+    #[method]
+    fn unregister_action(&mut self, name: GodotString, keys: VariantArray) -> bool {
+        let listener = self.hotkey_listener.as_mut().unwrap();
+
+        match listener.unregister_action(&name.to_string(), varray_to_vec(&keys).as_slice()) {
+            Ok(_) => true,
+            Err(e) => {
+                godot_error!("{:?}", e);
+                false
+            }
+        }
+    }
+
+    /// Godot -> Rust wrapper
+    #[method]
+    fn get_min_elapsed_time(&self) -> f32 {
+        self.hotkey_listener
+            .as_ref()
+            .unwrap()
+            .get_min_elapsed_time()
+    }
+
+    /// Godot -> Rust wrapper
+    #[method]
+    fn set_min_elapsed_time(&mut self, min_elapsed_time: f32) {
+        self.hotkey_listener
+            .as_mut()
+            .unwrap()
+            .set_min_elapsed_time(min_elapsed_time);
+    }
+
+    /// Godot -> Rust wrapper
+    #[method]
+    fn get_action_names(&self) -> VariantArray {
+        let r = VariantArray::new();
+
+        for n in self
+            .hotkey_listener
+            .as_ref()
+            .unwrap()
+            .get_action_names()
+            .iter()
+        {
+            r.push(n);
+        }
+
+        r.into_shared()
+    }
+
+    /// Godot -> Rust wrapper
+    #[method]
+    fn get_key_names(&self) -> VariantArray {
+        let r = VariantArray::new();
+
+        for n in self
+            .hotkey_listener
+            .as_ref()
+            .unwrap()
+            .get_key_names()
+            .iter()
+        {
+            r.push(n);
+        }
+
+        r.into_shared()
+    }
 }
 
-fn varray_to_slice(keys: &VariantArray) -> Vec<String> {
+/// Converts a `VariantArray` to a `Vec`.
+fn varray_to_vec(keys: &VariantArray) -> Vec<String> {
     keys.into_iter()
         .map(|x| x.to_string())
         .collect::<Vec<String>>()
 }
 
-pub fn init(handle: InitHandle) {
+fn init(handle: InitHandle) {
     handle.add_class::<HotkeyListenerNode>();
 }
 
