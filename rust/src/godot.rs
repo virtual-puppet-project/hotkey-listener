@@ -3,7 +3,7 @@ use gdnative::prelude::*;
 
 use crate::hotkey_listener::*;
 
-const KEY_RECEIVED_SIGNAL: &str = "key_received";
+const ACTION_RECEIVED_SIGNAL: &str = "action_pressed";
 
 /// Godot wrapper for interacting with the base Rust library.
 ///
@@ -43,7 +43,7 @@ impl HotkeyListenerNode {
     }
 
     fn register_signals(build: &ClassBuilder<Self>) {
-        build.signal(KEY_RECEIVED_SIGNAL).done();
+        build.signal(ACTION_RECEIVED_SIGNAL).done();
     }
 
     #[method]
@@ -62,7 +62,7 @@ impl HotkeyListenerNode {
         match self.receiver.recv() {
             Ok(s) => {
                 owner.emit_signal(
-                    KEY_RECEIVED_SIGNAL,
+                    ACTION_RECEIVED_SIGNAL,
                     &[GodotString::from_str(s).to_variant()],
                 );
                 return;
