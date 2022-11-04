@@ -331,7 +331,11 @@ impl HotkeyListener {
 }
 
 /// Converts a `String` slice to a `Vec<String>` and then takes the hash of that `Vec`.
+/// Sorts the keys beforehand to ensure ordering doesn't impact the hash.
 fn string_slice_to_vec_and_hash(keys: &[String]) -> Result<(Vec<KeyCode>, u64)> {
+    let mut keys = keys.to_vec();
+    keys.sort();
+
     let mut key_codes = vec![];
     for key in keys.iter() {
         match KeyCode::from_str(key) {
